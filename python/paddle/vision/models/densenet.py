@@ -98,6 +98,7 @@ class DenseNet(nn.Layer):
         bn_size (int) - multiplicative factor for number of bottle neck layers
         drop_rate (float) - dropout rate after each dense layer
         num_classes (int) - number of classification classes
+        with_pool (bool) - use pool before the last fc layer or not
 
     Examples:
     .. code-block:: python
@@ -115,7 +116,8 @@ class DenseNet(nn.Layer):
                  num_init_features=64,
                  bn_size=4,
                  drop_rate=0,
-                 num_classes=1000):
+                 num_classes=1000,
+                 with_pool=True):
 
         super(DenseNet, self).__init__()
 
@@ -144,14 +146,21 @@ class DenseNet(nn.Layer):
                 self.features.add_sublayer('transition%d' % (i + 1), trans)
                 num_features = num_features // 2
         self.features.add_sublayer('norm5', nn.BatchNorm2D(num_features))
-        self.classifier = nn.Linear(num_features, num_classes)
+        if with_pool:
+            self.avgpool = nn.AdaptiveAvgPool2D((1, 1))
+        if num_classes > 0:
+            self.classifier = nn.Linear(num_features, num_classes)
 
     def forward(self, x):
         features = self.features(x)
         out = nn.ReLU(features, )
         out = nn.AvgPool2D(
             out, kernel_size=7, stride=1).view(features.size(0), -1)
-        out = self.classifier(out)
+        if self.with_pool:
+            out = self.avgpool(x)
+        if self.num_classes > 0:
+            out = paddle.flatten(x, 1)
+            out = self.classifier(out)
         return out
 
 
