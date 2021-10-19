@@ -53,13 +53,14 @@ class _DenseLayer(nn.Sequential):
                 stride=1,
                 padding=1)),
         self.drop_rate = drop_rate
+        if self.drop_rate > 0:
+            self.dropout_feature = nn.Dropout(p=drop_rate, training=self.training)
 
     def forward(self, x):
         new_features = super(_DenseLayer, self).forward(x)
         if self.drop_rate > 0:
-            new_features = nn.Dropout(
-                new_features, p=self.drop_rate, training=self.training)
-        return fluid.layers.concat([x, new_features], axis=1)
+            new_features = self.dropout_feature(new_features)
+        return paddle.concat([x, new_features], axis=1)
 
 
 class _DenseBlock(nn.Sequential):
@@ -121,6 +122,9 @@ class DenseNet(nn.Layer):
 
         super(DenseNet, self).__init__()
 
+        self.num_classes = num_classes
+        self.with_pool = with_pool
+
         self.features = nn.Sequential(
             nn.Conv2D(
                 3, num_init_features, kernel_size=7, stride=2, padding=3),
@@ -150,16 +154,17 @@ class DenseNet(nn.Layer):
             self.avgpool = nn.AdaptiveAvgPool2D((1, 1))
         if num_classes > 0:
             self.classifier = nn.Linear(num_features, num_classes)
+        
+        self.relu = nn.ReLU()
+        self.avgpool2d = nn.AvgPool2D(kernel_size=7, stride=1)
 
     def forward(self, x):
         features = self.features(x)
-        out = nn.ReLU(features, )
-        out = nn.AvgPool2D(
-            out, kernel_size=7, stride=1).view(features.size(0), -1)
+        out = self.relu(features)
         if self.with_pool:
-            out = self.avgpool(x)
+            out = self.avgpool(out)
         if self.num_classes > 0:
-            out = paddle.flatten(x, 1)
+            out = paddle.flatten(out, 1, -1)
             out = self.classifier(out)
         return out
 
